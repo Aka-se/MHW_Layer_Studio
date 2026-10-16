@@ -4,6 +4,45 @@
 Mesh 设置 visibleCondition / Group ID，并生成适配
 MHWI-VisualControllerExtended 的血量规则。
 
+## 下载与前置 MOD / Downloads and requirements
+
+### 只使用编辑器 / Editor only
+
+从 [Releases](https://github.com/Naidong-Lin/MHW_Layer_Studio/releases/latest)
+下载 `MHW-Layer-Studio-Setup-*.exe` 并安装。打开、预览、拆分、分组和导出 MOD3
+都在游戏外完成，不需要 Blender，也不需要安装游戏插件。
+
+Download `MHW-Layer-Studio-Setup-*.exe` from
+[Releases](https://github.com/Naidong-Lin/MHW_Layer_Studio/releases/latest).
+Editing, previewing, splitting, grouping, and exporting happen outside the game;
+Blender and runtime plugins are not required for the editor itself.
+
+### 让分层在游戏中生效 / In-game layer control
+
+按顺序准备：
+
+1. 《Monster Hunter: World: Iceborne》PC 版；
+2. [Stracker's Loader](https://www.nexusmods.com/monsterhunterworld/mods/1982)，用于加载 `nativePC\plugins` 中的 DLL；
+3. 同一 Release 中的 `MHWLS-VisualController-Plugin-*.zip`，解压后把 `nativePC` 合并到游戏根目录；
+4. 由本编辑器导出的分层模组，以及对应的血量规则或随机战损清单。
+
+Required in order:
+
+1. Monster Hunter: World: Iceborne for PC;
+2. [Stracker's Loader](https://www.nexusmods.com/monsterhunterworld/mods/1982) to load DLLs from `nativePC\plugins`;
+3. `MHWLS-VisualController-Plugin-*.zip` from the same Release, merged into the game directory;
+4. A layered mod exported by this editor, together with its health rules or randomized-damage manifest.
+
+`GreatSwordBurst` 和随机战损已经集成在 VisualControllerExtended 中，不需要额外的
+大剑 DLL。原版 `visual_controller_v5` 仅用于其自身变身规则兼容，不是本工具血量
+分层流程的必需文件。第三方前置不随本仓库重新分发，请从原作者页面下载。
+
+`GreatSwordBurst` and randomized damage are built into
+VisualControllerExtended; no separate Great Sword DLL is required. The original
+`visual_controller_v5` is only relevant when using its own transformation rules
+and is not required for this editor's health-layer workflow. Third-party
+prerequisites are linked rather than redistributed.
+
 ## 当前功能
 
 当前版本为 0.6.1：拆分成组后的模型点选固定为“第一次选整组、再次点同一处选成员”，旧项目无法再误关组选择；同时保留 0.6.0 的可选“手动分层 / 随机战损”、拆分、分配、贴图和安全导出流程。默认仍使用手动分层，不会自动改写现有模组。
