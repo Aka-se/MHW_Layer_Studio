@@ -21,12 +21,12 @@ cl /nologo /std:c++17 /utf-8 /O2 /MT /W4 /WX /EHsc ^
  tests\charge_burst.cpp /Fo:build\safetyhook\tests\charge-burst.obj ^
  /Fe:build\safetyhook\tests\charge-burst.exe
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++23 /utf-8 /O2 /MT /W4 /EHsc ^
+cl /nologo /std:c++latest /utf-8 /O2 /MT /W4 /EHsc ^
  /DZYDIS_STATIC_BUILD /DZYCORE_STATIC_BUILD /Ithird_party\safetyhook ^
  tests\charge_probe.cpp build\safetyhook\safetyhook.obj build\safetyhook\Zydis.obj ^
  /Fo:build\safetyhook\tests\charge-probe.obj /Fe:build\safetyhook\tests\charge-probe.exe /link psapi.lib user32.lib
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++23 /utf-8 /O2 /MT /W4 /EHsc ^
+cl /nologo /std:c++latest /utf-8 /O2 /MT /W4 /EHsc ^
  /DZYDIS_STATIC_BUILD /DZYCORE_STATIC_BUILD /Ithird_party\safetyhook ^
  tests\charge_integration.cpp build\safetyhook\safetyhook.obj build\safetyhook\Zydis.obj ^
  /Fo:build\safetyhook\tests\charge-integration.obj /Fe:build\safetyhook\tests\charge-integration.exe /link psapi.lib user32.lib
@@ -35,7 +35,7 @@ cl /nologo /std:c++17 /utf-8 /O2 /MT /W4 /WX /EHsc ^
  tests\random_damage.cpp /Fo:build\safetyhook\tests\random-damage.obj ^
  /Fe:build\safetyhook\tests\random-damage.exe
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++23 /utf-8 /O2 /MT /W4 /EHsc ^
+cl /nologo /std:c++latest /utf-8 /O2 /MT /W4 /EHsc ^
  /DZYDIS_STATIC_BUILD /DZYCORE_STATIC_BUILD /Ithird_party\safetyhook ^
  tests\damage_integration.cpp build\safetyhook\safetyhook.obj build\safetyhook\Zydis.obj ^
  /Fo:build\safetyhook\tests\damage-integration.obj /Fe:build\safetyhook\tests\damage-integration.exe /link psapi.lib user32.lib
