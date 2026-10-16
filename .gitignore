@@ -1,0 +1,34 @@
+.venv/
+build/
+dist/
+installer-output/
+open-source-output/
+__pycache__/
+*.pyc
+*.log
+tools/
+validation-output/
+test-install*/
+
+# Local mod/game material. These files are user-provided test inputs and must
+# never be committed or included in a source release.
+*.zip
+*.rar
+*.7z
+*.mod3
+*.mrl3
+nativePC/
+gs-recorder/
+MHWI-VisualControllerExtended/
+plugin-source/
+
+# Redistributable dependency source and synthetic archive fixtures.
+!assets/7zip/7z2604-src.7z
+!tests/fixtures/**/*.rar
+!tests/fixtures/**/*.7z
+
+# Local validation notes and captures.
+V*_VALIDATION.md
+GS_*VALIDATION.md
+GAME_INPUT_VALIDATION.md
+WINDOWS_VALIDATION.md

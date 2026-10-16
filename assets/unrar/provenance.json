@@ -1,0 +1,10 @@
+{
+  "official_downloads": [
+    "https://www.rarlab.com/rar/winrar-x64-723.exe",
+    "https://www.rarlab.com/rar/unrarsrc.tar.gz"
+  ],
+  "sha256": {
+    "UnRAR.exe": "0d3715001790f0fd18d3e850f947b540530b2d2deb9a2e6a9e84f2ed7b234235",
+    "LICENSE.txt": "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a"
+  }
+}

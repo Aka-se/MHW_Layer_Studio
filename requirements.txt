@@ -1,0 +1,6 @@
+numpy>=2.0,<2.6
+Pillow>=11,<13
+pyinstaller>=6.10,<7
+numba>=0.64,<0.69
+rarfile>=4.2,<5
+pyooz==0.0.8
