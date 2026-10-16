@@ -71,6 +71,8 @@ nativePC/plugins/MHWLayerStudio-<标识>.ini
 
 这是该模组自己的战损清单，插件会自动扫描读取。它应当随模组一起安装到游戏目录，**不要合并到** `MHWI-VisualControllerExtended.ini`。单独 MOD3 无法携带该清单，因此随机战损必须导出完整压缩包或文件夹。
 
+使用狩技盒子启用模组后，请确认清单实际出现在游戏的 `nativePC\plugins`，与插件 DLL 同目录。部分管理流程只安装服装文件，不会同步插件目录；此时需要从模组的 `files\nativePC\plugins` 手动复制 `MHWLayerStudio-*.ini`。停用该模组时也应删除对应清单，避免残留配置继续占用控制 ID。
+
 普通模式中设置的 Group 和阈值不会被删除：Group 0 默认作为“基础 · 永不隐藏”，其他部件按已有命名组成为随机单位，原阈值用于以后切回普通模式。`Mode=random` 时随机清单接管这些部件，不再同时按 80%/60%/40%/20% 固定隐藏。
 
 如果游戏中的随机模式仍表现为固定分层，请检查导出包中的 MOD3 是否已经使用 20000–64999 范围的独立控制 ID、`MHWLayerStudio-<标识>.ini` 是否安装到实际游戏的 `nativePC\plugins`、其中是否为 `Mode=random`，并在停用旧模组副本后按 `Ctrl+F5` 重载。
