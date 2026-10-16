@@ -43,6 +43,17 @@ VisualControllerExtended; no separate Great Sword DLL is required. The original
 and is not required for this editor's health-layer workflow. Third-party
 prerequisites are linked rather than redistributed.
 
+## 仓库结构 / Repository layout
+
+- 仓库根目录：MHW Layer Studio 编辑器、测试和 Windows 安装脚本；
+- `plugins/MHWI-VisualControllerExtended`：配套游戏运行插件源码、默认 INI、测试与第三方许可证；
+- GitHub Release：普通用户使用的编辑器 Setup 和插件 ZIP。
+
+The repository root contains the editor, tests, and Windows packaging scripts.
+`plugins/MHWI-VisualControllerExtended` contains the companion runtime plugin,
+its default INI, native tests, and required third-party notices. Ready-to-use
+editor and plugin packages are published through GitHub Releases.
+
 ## 当前功能
 
 当前版本为 0.6.1：拆分成组后的模型点选固定为“第一次选整组、再次点同一处选成员”，旧项目无法再误关组选择；同时保留 0.6.0 的可选“手动分层 / 随机战损”、拆分、分配、贴图和安全导出流程。默认仍使用手动分层，不会自动改写现有模组。

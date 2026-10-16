@@ -1,0 +1,36 @@
+name: Build Windows plugin
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "plugins/MHWI-VisualControllerExtended/**"
+      - ".github/workflows/build-plugin-windows.yml"
+  push:
+    paths:
+      - "plugins/MHWI-VisualControllerExtended/**"
+      - ".github/workflows/build-plugin-windows.yml"
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: plugins/MHWI-VisualControllerExtended
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run native tests
+        shell: cmd
+        run: test.bat
+      - name: Stage plugin artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/nativePC/plugins | Out-Null
+          Copy-Item build/safetyhook/MHWI-VisualControllerExtended.dll release/nativePC/plugins/
+          Copy-Item MHWI-VisualControllerExtended.ini release/nativePC/plugins/
+          Copy-Item README.md,LICENSE,THIRD_PARTY_NOTICES.md,DEVELOPMENT.md,MHW_TOOLKIT_LICENSE.txt release/
+          Copy-Item third_party/minhook/LICENSE.txt release/MINHOOK_LICENSE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MHWLS-VisualController-Plugin
+          path: plugins/MHWI-VisualControllerExtended/release
