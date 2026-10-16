@@ -19,8 +19,8 @@ test-install*/
 *.mrl3
 nativePC/
 gs-recorder/
-MHWI-VisualControllerExtended/
-plugin-source/
+/MHWI-VisualControllerExtended/
+/plugin-source/
 
 # Redistributable dependency source and synthetic archive fixtures.
 !assets/7zip/7z2604-src.7z
