@@ -50,6 +50,31 @@ Standalone MOD3 layer editor for *Monster Hunter: World*. Select, split, group, 
 
 隐藏比例和层级数量可以在编辑器中自定义。
 
+## 普通分层与随机战损
+
+### 普通分层
+
+普通模式直接使用 MOD3 中的 Group ID 和插件主配置 `nativePC\plugins\MHWI-VisualControllerExtended.ini`：
+
+- Release 附带的插件 INI 已包含 Group 60/61/62/63 对应 80%/60%/40%/20% 的默认规则，使用默认值时不必再次导出规则；
+- 修改隐藏比例、增加层级或使用自定义 Group 后，点击编辑器的“导出血量规则”，得到 `MHWLayerStudio_health_rules.ini`；
+- 这个文件是**规则片段**，不会被插件单独加载。先备份游戏中的主 INI，再用导出的 `[RuleN]` 替换旧的 Layer Studio 分层规则；不要保留同 ID 的新旧规则，也不要覆盖 `[VisualController]`、`[GreatSwordBurst]` 等其他设置；
+- 保存后在游戏中按 `Ctrl+F5` 重载，或重启游戏。
+
+### 随机战损
+
+开启随机战损后，导出 ZIP 或完整模组文件夹会自动加入：
+
+```text
+nativePC/plugins/MHWLayerStudio-<标识>.ini
+```
+
+这是该模组自己的战损清单，插件会自动扫描读取。它应当随模组一起安装到游戏目录，**不要合并到** `MHWI-VisualControllerExtended.ini`。单独 MOD3 无法携带该清单，因此随机战损必须导出完整压缩包或文件夹。
+
+普通模式中设置的 Group 和阈值不会被删除：Group 0 默认作为“基础 · 永不隐藏”，其他部件按已有命名组成为随机单位，原阈值用于以后切回普通模式。`Mode=random` 时随机清单接管这些部件，不再同时按 80%/60%/40%/20% 固定隐藏。
+
+如果游戏中的随机模式仍表现为固定分层，请检查导出包中的 MOD3 是否已经使用 20000–64999 范围的独立控制 ID、`MHWLayerStudio-<标识>.ini` 是否安装到实际游戏的 `nativePC\plugins`、其中是否为 `Mode=random`，并在停用旧模组副本后按 `Ctrl+F5` 重载。
+
 ## 简单使用教程
 
 1. 安装并打开 MHW Layer Studio。
@@ -60,8 +85,6 @@ Standalone MOD3 layer editor for *Monster Hunter: World*. Select, split, group, 
 6. 拖动血量滑条检查效果，确认不会产生身体缺口。
 7. 压缩包使用“导出”；模组文件夹可以“备份并覆盖保存”。
 8. 把导出的模组交给狩技盒子启用，或安装到游戏目录。更新规则后在游戏中按 `Ctrl+F5` 重载，也可以重启游戏。
-
-详细规则片段会导出为 `MHWLayerStudio_health_rules.ini`。手动安装时，应把规则合并到游戏实际加载的 `nativePC\plugins\MHWI-VisualControllerExtended.ini`，并先备份原文件。
 
 ## 开发日志
 
