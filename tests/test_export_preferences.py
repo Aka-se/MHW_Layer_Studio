@@ -16,8 +16,8 @@ class ExportPreferencesTests(unittest.TestCase):
             target = root / "外套分层.zip"
             update_settings(game_directory="game", mod_library_directory="mods")
             remember_export(source, target)
-            self.assertEqual(target, export_suggestion(source, ".zip"))
-            self.assertEqual(root / "B_layered.zip", export_suggestion(root / "B.7z", ".zip"))
+            self.assertEqual(target.resolve(), export_suggestion(source, ".zip"))
+            self.assertEqual(root.resolve() / "B_layered.zip", export_suggestion(root / "B.7z", ".zip"))
             self.assertEqual("game", read_settings()["game_directory"])
             self.assertEqual("mods", read_settings()["mod_library_directory"])
 
@@ -35,6 +35,6 @@ class ExportPreferencesTests(unittest.TestCase):
             output = root / "exports"
             output.mkdir()
             remember_export(root / "A.zip", output / "custom.zip")
-            self.assertEqual(output / "B_layered.zip", export_suggestion(root / "B.zip", ".zip"))
+            self.assertEqual(output.resolve() / "B_layered.zip", export_suggestion(root / "B.zip", ".zip"))
             update_settings(file_exports=[], export_directory=123)
             self.assertEqual(root / "B_layered.zip", export_suggestion(root / "B.zip", ".zip"))

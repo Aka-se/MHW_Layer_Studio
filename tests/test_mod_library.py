@@ -79,7 +79,7 @@ class ModLibraryTests(unittest.TestCase):
             _, records, _ = scan_library(root)
             self.assertEqual("盒子已启用", next(r.box_state for r in records if r.name == "New"))
             self.assertEqual(2, next(r.model_count for r in records if r.kind == "ZIP"))
-            index = LibraryIndex(root)
+            index = LibraryIndex(normalize_root(root))
             before = index.path.read_bytes()
             scan_library(root, cancelled=lambda: True)
             self.assertEqual(before, index.path.read_bytes())
@@ -115,11 +115,11 @@ class ModLibraryTests(unittest.TestCase):
             texture.write_bytes(b"texture only")
             before = {p: hashlib.sha256(p.read_bytes()).digest() for p in root.rglob("*") if p.is_file()}
             scanned, records, errors = scan_library(box)
-            self.assertEqual(root, scanned)
+            self.assertEqual(root.resolve(), scanned)
             self.assertFalse(errors)
             self.assertEqual(1, len(records))
             self.assertEqual("外套 & 饰品", records[0].name)
-            self.assertEqual(root / "1030/files", records[0].path)
+            self.assertEqual(root.resolve() / "1030/files", records[0].path)
             self.assertEqual("盒子未启用", records[0].box_state)
             self.assertEqual(1, records[0].model_count)
             self.assertEqual(records, filter_mods(records, "外套 1030"))
@@ -147,7 +147,7 @@ class ModLibraryTests(unittest.TestCase):
             self.assertNotIn("贴图", {r.name for r in records})
             self.assertTrue(all(r.model_count is None for r in records if r.kind in ("RAR", "7Z")))
             _, direct, _ = scan_library(root / "普通外观")
-            self.assertEqual([root / "普通外观"], [r.path for r in direct])
+            self.assertEqual([(root / "普通外观").resolve()], [r.path for r in direct])
 
     def test_settings_preserve_game_directory_and_custom_fields_both_directions(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -159,14 +159,14 @@ class ModLibraryTests(unittest.TestCase):
                 (profile / "settings.json").write_text(json.dumps({"other_preference": 123}))
                 save_game_directory("E:/Game/MHW")
                 save_library_root(library)
-                self.assertEqual(str(library), saved_library_root())
+                self.assertEqual(str(library.resolve()), saved_library_root())
                 self.assertEqual("E:/Game/MHW", saved_game_directory())
                 save_game_directory("E:/Game/Other")
-                self.assertEqual(str(library), saved_library_root())
+                self.assertEqual(str(library.resolve()), saved_library_root())
                 self.assertEqual(123, json.loads((profile / "settings.json").read_text())["other_preference"])
                 with self.assertRaises(ValueError):
                     save_library_root(library / "missing")
-                self.assertEqual(str(library), saved_library_root())
+                self.assertEqual(str(library.resolve()), saved_library_root())
 
     def test_cancel_and_bad_metadata_do_not_break_inventory(self):
         with tempfile.TemporaryDirectory() as temp:
