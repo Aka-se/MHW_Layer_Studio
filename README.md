@@ -11,10 +11,12 @@ Standalone MOD3 layer editor for *Monster Hunter: World*. Select, split, group, 
 
 ## 下载
 
+发行文件统一使用 `MHWI`（Monster Hunter: World: Iceborne）前缀。旧包名中的 `MHWLS` 是 MHW Layer Studio 的缩写，并非 Monster Hunter Wilds；旧配置文件名保持兼容。
+
 前往 [Releases](https://github.com/Aka-se/MHW_Layer_Studio/releases/latest)：
 
-- 安装编辑器：下载 `MHW-Layer-Studio-Setup-*.exe`；
-- 启用游戏内分层：同时下载 `MHWLS-VisualController-Plugin-*.zip`。
+- 安装编辑器：下载 `MHWI-Layer-Studio-Setup-*.exe`；
+- 启用游戏内分层：同时下载 `MHWI-VisualController-Plugin-*.zip`。
 
 只在游戏外编辑、预览和导出 MOD3 时，不需要 Blender 或游戏插件。
 
@@ -22,7 +24,7 @@ Standalone MOD3 layer editor for *Monster Hunter: World*. Select, split, group, 
 
 1. 《Monster Hunter: World: Iceborne》PC 版；
 2. [Stracker's Loader](https://www.nexusmods.com/monsterhunterworld/mods/1982)，用于加载 `nativePC\plugins` 中的 DLL；
-3. 本项目 Release 中的 `MHWLS-VisualController-Plugin-*.zip`；
+3. 本项目 Release 中的 `MHWI-VisualController-Plugin-*.zip`；
 4. 使用上游变身规则时，请按 [MHWI-VisualControllerExtended 上游说明](https://github.com/Mi1ice/MHWI-VisualControllerExtended) 配置 `visual_controller_v5`。
 
 `GreatSwordBurst` 和随机战损已经集成在配套 VisualControllerExtended 中，不需要安装单独的大剑 DLL。第三方前置 MOD 不随本仓库重新分发，请从原作者页面下载。
