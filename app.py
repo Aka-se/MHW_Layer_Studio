@@ -29,7 +29,7 @@ from dialog_geometry import center_dialog
 
 
 APP_NAME = "MHW Layer Studio"
-APP_VERSION = "0.6.2"
+APP_VERSION = "0.6.3"
 
 
 class LayerStudio(tk.Tk):
@@ -1181,7 +1181,8 @@ class LayerStudio(tk.Tk):
         lines = [f"已选择 {len(selected)} 个 Mesh"] if selected else ["未选择 Mesh", "点击模型或列表开始辨认部件"]
         for document, index in selected[:4]:
             mesh = document.meshes[index]
-            material = document.material_info(mesh.material_id)
+            library = self.renderer.texture_library
+            material = library.material_info(document, mesh.material_id) if library else document.material_info(mesh.material_id)
             annotation = self.session.annotations.get((document.name, index), {})
             lines.extend(["", f"{document.equipment_part} / {Path(document.name).name} · Mesh {index}",
                           f"套装：{document.outfit_label}",

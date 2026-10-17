@@ -14,6 +14,7 @@ from mod3 import ModWorkspace
 from textures import TextureLibrary, decode_tex
 from test_core import minimal_mod3
 from test_textures import tex
+from test_editor import mrl_fixture
 
 
 def synthetic_chunk(path, reference="pl/test/armor.tex", payload=None, short_name=False):
@@ -36,6 +37,89 @@ def synthetic_chunk(path, reference="pl/test/armor.tex", payload=None, short_nam
 
 
 class GameResourceTests(unittest.TestCase):
+    def test_material_lookup_rebuilds_texture_only_cache_and_uses_newest_patch(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root, cache = Path(temp) / "game", Path(temp) / "cache"
+            reference = "npc/npcbs/npcbs009/npcbs009.mrl3"
+            original = bytes(mrl_fixture())
+            synthetic_chunk(root / "chunk/chunkG0.bin", reference, original)
+            resources = GameTextures(root, cache)
+            try:
+                reader = ChunkReader(resources.paths[0], resources.worker, resources.pattern, cache)
+                resources.readers[resources.paths[0]] = reader
+                reader.cache.mkdir(parents=True, exist_ok=True)
+                (reader.cache / "index.json").write_text(json.dumps({"signature": reader.signature, "textures": {}}))
+                data, origin = resources.get_material(r"nativePC\npc\npcbs\npcbs009\npcbs009")
+                self.assertEqual(original, data)
+                self.assertIn("chunkG0.bin", origin)
+                with patch.object(reader, "read", side_effect=AssertionError("material payload should be cached")):
+                    self.assertEqual(original, resources.get_material(reference)[0])
+                newer = original + b"new patch"
+                synthetic_chunk(root / "chunk/chunkG10.bin", reference, newer)
+                self.assertEqual(newer, resources.get_material(reference)[0])
+                with self.assertRaises(ResourceError):
+                    resources.get_material("../secret")
+                resources.close()
+                with self.assertRaises(ResourceError):
+                    resources.get_material(reference)
+            finally:
+                resources.close()
+
+    def test_missing_npc_materials_resolve_before_textures_without_exporting_game_assets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            source = base / "npc.zip"
+            name = "Option/NativePC/npc/npcbs/npcbs009/npcbs009.mod3"
+            with zipfile.ZipFile(source, "w") as z:
+                z.writestr(name, minimal_mod3())
+                # A mod's texture must win even when its MRL3 comes from the game.
+                z.writestr("Option/NativePC/pl/test/body_BM.tex", tex())
+            root = base / "game"
+            synthetic_chunk(root / "chunk/chunkG0.bin", "npc/npcbs/npcbs009/npcbs009.mrl3", bytes(mrl_fixture()))
+            workspace = ModWorkspace.open(source)
+            document = workspace.documents[0]
+            document.material_names = ["body_skin"]
+            original = document.bytes()
+            resources = GameTextures(root, base / "cache")
+            try:
+                library = TextureLibrary(workspace, game=resources)
+                self.assertEqual([255, 0, 0, 255], library.get(document, 0)[0, 0].tolist())
+                self.assertIn("游戏资源", library.material_info(document, 0).status)
+                self.assertIn("模组内", library.status[(name, 0)])
+                self.assertEqual({}, document.materials)
+                self.assertEqual(original, document.bytes())
+                exported = workspace.export(base / "export.zip")
+                with zipfile.ZipFile(exported) as z:
+                    self.assertFalse(any(n.endswith('.mrl3') for n in z.namelist()))
+                    self.assertEqual(original, z.read(name))
+            finally:
+                resources.close()
+
+    def test_shared_material_fallback_keeps_custom_bindings_and_fails_cleanly(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            source = base / "npc.zip"
+            name = "nativePC/npc/example.mod3"
+            with zipfile.ZipFile(source, "w") as z:
+                z.writestr(name, minimal_mod3())
+                z.writestr("nativePC/pl/test/body_BM.tex", tex())
+            shared = base / "shared/nativePC/npc"
+            shared.mkdir(parents=True)
+            (shared / "example.mrl3").write_bytes(mrl_fixture())
+            workspace = ModWorkspace.open(source)
+            document = workspace.documents[0]
+            document.material_names = ["body_skin", "custom"]
+            custom = MaterialInfo("custom", color_texture="pl/custom/unique_BM")
+            document.materials[1] = custom
+            library = TextureLibrary(workspace, roots=[base / "shared"])
+            self.assertIsNotNone(library.get(document, 0))
+            self.assertEqual(custom, library.material_info(document, 1))
+            (shared / "example.mrl3").write_bytes(b"broken")
+            library = TextureLibrary(workspace, roots=[base / "shared"])
+            self.assertIsNone(library.get(document, 0))
+            self.assertIn("MRL3", library.status[(name, 0)])
+            self.assertIsNone(TextureLibrary(workspace).get(document, 0))
+
     def test_cross_block_read_short_names_cache_and_game_files_unchanged(self):
         with tempfile.TemporaryDirectory() as temp:
             root, cache = Path(temp) / "game", Path(temp) / "cache"

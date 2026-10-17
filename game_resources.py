@@ -71,12 +71,16 @@ def save_game_directory(directory):
 
 
 def normalize_reference(name):
+    return _normalize_reference(name, ".tex")
+
+
+def _normalize_reference(name, extension):
     name = name.replace("\\", "/").lstrip("/")
     if name.lower().startswith("nativepc/"):
         name = name[9:]
     if not name or any(p in ("", ".", "..") or ":" in p for p in name.split("/")) or any(ord(c) < 32 for c in name):
         raise ResourceError("游戏贴图路径无效")
-    return name.lower() if name.lower().endswith(".tex") else name.lower() + ".tex"
+    return name.lower() if name.lower().endswith(extension) else name.lower() + extension
 
 
 def chunk_paths(directory):
@@ -215,10 +219,13 @@ class ChunkReader:
             if index_path.stat().st_size > 64 * 1024 ** 2:
                 raise ValueError()
             data = json.loads(index_path.read_text(encoding="utf-8"))
-            if data.get("signature") == self.signature and isinstance(data.get("textures"), dict):
-                records = data["textures"]
+            # Version 1 indexed TEX only. Rebuild it once to include companion
+            # materials, otherwise a valid old cache silently hides every MRL3.
+            if data.get("version") == 2 and data.get("signature") == self.signature and isinstance(data.get("resources"), dict):
+                records = data["resources"]
                 for name, (offset, size) in records.items():
-                    if normalize_reference(name) != name or type(offset) is not int or type(size) is not int or not 0 < size <= 256 * 1024 ** 2 or not 0 <= offset < offset + size <= len(self.table) * BLOCK:
+                    extension = Path(name).suffix
+                    if extension not in (".tex", ".mrl3") or _normalize_reference(name, extension) != name or type(offset) is not int or type(size) is not int or not 0 < size <= 256 * 1024 ** 2 or not 0 <= offset < offset + size <= len(self.table) * BLOCK:
                         raise ValueError()
                 self.records = records
                 return records
@@ -248,8 +255,9 @@ class ChunkReader:
                 if kind not in (0, 2):
                     continue
                 name = row[:80 if kind == 2 else 160].split(b"\0", 1)[0].decode("ascii", errors="strict").replace("\\", "/").lstrip("/")
-                if name.lower().endswith(".tex"):
-                    name = normalize_reference(name)
+                extension = Path(name).suffix.lower()
+                if extension in (".tex", ".mrl3"):
+                    name = _normalize_reference(name, extension)
                     if not 0 < size <= 256 * 1024 ** 2 or offset + size > len(self.table) * BLOCK:
                         raise ResourceError("游戏贴图索引无效")
                     records[name] = (offset, size)
@@ -258,27 +266,32 @@ class ChunkReader:
             raise ResourceError("游戏资源清单未完整读取")
         self.records = records
         try:
-            _atomic_bytes(index_path, json.dumps({"signature": self.signature, "textures": records}, separators=(",", ":")).encode())
+            _atomic_bytes(index_path, json.dumps({"version": 2, "signature": self.signature, "resources": records}, separators=(",", ":")).encode())
         except OSError:
             pass  # A full cache disk must not prevent read-only preview.
         return records
 
     def texture(self, name):
+        return self.resource(name)
+
+    def resource(self, name):
         offset, size = self.index()[name]
         key = hashlib.sha256(name.encode()).hexdigest()
-        path = self.cache / (key + ".tex")
+        extension = Path(name).suffix
+        magic = {".tex": b"TEX\0", ".mrl3": b"MRL\0"}[extension]
+        path = self.cache / (key + extension)
         try:
             if path.stat().st_size != size:
                 raise OSError("invalid cached length")
             data = path.read_bytes()
             checksum = path.with_suffix(".sha256").read_text()
-            if len(data) == size and hashlib.sha256(data).hexdigest() == checksum:
+            if len(data) == size and data[:4] == magic and hashlib.sha256(data).hexdigest() == checksum:
                 return data, True
         except OSError:
             pass
         data = self.read(offset, size)
-        if data[:4] != b"TEX\0":
-            raise ResourceError("索引对应的资源不是 TEX 贴图")
+        if data[:4] != magic:
+            raise ResourceError(f"索引对应的资源不是 {extension[1:].upper()} 文件")
         try:
             _atomic_bytes(path, data)
             _atomic_bytes(path.with_suffix(".sha256"), hashlib.sha256(data).hexdigest().encode())
@@ -305,23 +318,29 @@ class GameTextures:
         self.closed = False
 
     def get(self, reference):
-        name = normalize_reference(reference)
+        return self._get(reference, ".tex", "贴图")
+
+    def get_material(self, reference):
+        return self._get(reference, ".mrl3", "材质")
+
+    def _get(self, reference, extension, label):
+        name = _normalize_reference(reference, extension)
         with self.lock:
             self.root, self.paths = chunk_paths(self.root)
             for i, path in enumerate(self.paths):
                 if self.closed:
                     raise ResourceError("游戏资源读取已取消")
-                self.progress = f"正在查找游戏贴图 · {i + 1}/{len(self.paths)} · {path.name}"
+                self.progress = f"正在查找游戏{label} · {i + 1}/{len(self.paths)} · {path.name}"
                 current = [str(path.resolve()), path.stat().st_size, path.stat().st_mtime_ns]
                 if path not in self.readers or self.readers[path].signature != current:
                     self.readers[path] = ChunkReader(path, self.worker, self.pattern, self.cache)
                 reader = self.readers[path]
                 if name in reader.index():
-                    data, cached = reader.texture(name)
-                    self.progress = "游戏贴图已加载"
+                    data, cached = reader.resource(name)
+                    self.progress = f"游戏{label}已加载"
                     return data, f"游戏资源 · {path.name} · {name}" + (" · 缓存" if cached else "")
-            self.progress = "游戏资源中未找到此颜色图"
-            raise ResourceError(f"游戏资源中没有此贴图：{reference}")
+            self.progress = f"游戏资源中未找到此{label}"
+            raise ResourceError(f"游戏资源中没有此{label}：{reference}")
 
     def close(self):
         self.closed = True

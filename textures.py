@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 
 import numpy as np
 from PIL import Image
+from materials import MaterialInfo, material_hash, read_mrl3_bindings
 
 
 class TextureError(ValueError):
@@ -101,24 +102,54 @@ class TextureLibrary:
         self.cache = {}
         self.status = {}
         self._archive_names = None
+        self._material_attempts = set()
+        self._material_fallbacks = {}
+        self._material_errors = {}
+
+    def material_info(self, document, material_id):
+        # Preview-only bindings stay with this library, not the document/session.
+        # Changing game roots rebuilds the library and discards old fallbacks.
+        return self._material_fallbacks.get((document.name, material_id), document.material_info(material_id))
+
+    def _load_missing_materials(self, document):
+        if document.name in self._material_attempts:
+            return
+        self._material_attempts.add(document.name)
+        name = document.name.replace("\\", "/")
+        marker = name.lower().find("nativepc/")
+        reference = str(PurePosixPath(name[marker + 9:] if marker >= 0 else name).with_suffix(".mrl3"))
+        try:
+            data, source = self._read(document, reference, extension=".mrl3")
+            bindings = read_mrl3_bindings(data)
+            for mid, name in enumerate(document.material_names):
+                current = document.material_info(mid)
+                if current.textures or current.color_texture:
+                    continue
+                hashed = material_hash(name)
+                binding = bindings.get(hashed)
+                if binding:
+                    self._material_fallbacks[(document.name, mid)] = MaterialInfo(
+                        name, hashed, binding.textures, "预览补读 MRL3 · " + source, binding.color_texture)
+        except (ValueError, OSError, KeyError, struct.error, NotImplementedError) as exc:
+            self._material_errors[document.name] = "配套 MRL3 补读失败：" + str(exc)
 
     @staticmethod
-    def color_reference(document, material_id):
-        material = document.material_info(material_id)
+    def color_reference(document, material_id, material=None):
+        material = material if material is not None else document.material_info(material_id)
         if material.color_texture:
             return material.color_texture
         references = material.textures
         return next((p for p in references if re.search(r"(?:_bml|_bm|albedo|diffuse)(?:\.tex)?$", p, re.I)), None)
 
     @staticmethod
-    def _paths(reference, document):
+    def _paths(reference, document, extension=".tex"):
         normalized = reference.replace("\\", "/")
         path = PurePosixPath(normalized)
         if path.is_absolute() or any(p in ("..", ".") or ":" in p for p in path.parts):
             raise TextureError("贴图路径无效")
         normalized = normalized.removeprefix("/")
-        if not normalized.lower().endswith(".tex"):
-            normalized += ".tex"
+        if not normalized.lower().endswith(extension):
+            normalized += extension
         if normalized.lower().startswith("nativepc/"):
             normalized = normalized[9:]
         # Optional mod variants may each contain their own nativePC folder.
@@ -126,8 +157,8 @@ class TextureLibrary:
         prefix = document.name[:marker] if marker >= 0 else ""
         return list(dict.fromkeys([prefix + "nativePC/" + normalized, "nativePC/" + normalized, normalized]))
 
-    def _read(self, document, reference):
-        paths = self._paths(reference, document)
+    def _read(self, document, reference, extension=".tex"):
+        paths = self._paths(reference, document, extension)
         workspace = self.workspace
         if workspace.kind in ("zip", "rar", "7z"):
             with zipfile.ZipFile(workspace.archive_path) as archive:
@@ -153,8 +184,14 @@ class TextureLibrary:
                 if candidate.is_file():
                     return self._read_file(candidate), str(candidate)
         if self.game:
-            return self.game.get(reference)
-        raise TextureError("未找到颜色图；可设置游戏资源目录、共享 nativePC 目录或指定颜色图")
+            if extension == ".mrl3":
+                getter = getattr(self.game, "get_material", None)
+                if getter:
+                    return getter(reference)
+            else:
+                return self.game.get(reference)
+        raise TextureError("未找到配套材质；请在设置中选择游戏资源目录" if extension == ".mrl3"
+                           else "未找到颜色图；可设置游戏资源目录、共享 nativePC 目录或指定颜色图")
 
     @staticmethod
     def _read_file(path):
@@ -168,7 +205,11 @@ class TextureLibrary:
             return self.cache[key]
         try:
             override = self.overrides.get(key)
-            reference = self.color_reference(document, material_id)
+            material = self.material_info(document, material_id)
+            if not override and not material.textures and not material.color_texture:
+                self._load_missing_materials(document)
+                material = self.material_info(document, material_id)
+            reference = self.color_reference(document, material_id, material)
             if override:
                 data, source = self._read_file(Path(override)), str(override)
             elif reference:
@@ -187,7 +228,7 @@ class TextureLibrary:
                     self.status[key] = "预览常量颜色 · " + reference + "（未模拟 Shader 材质染色）"
                     return self.cache[key]
             else:
-                raise TextureError("材质没有颜色图记录；可手动指定")
+                raise TextureError(self._material_errors.get(document.name, "材质没有颜色图记录；可手动指定"))
             if data[:4] == b"TEX\0":
                 image = decode_tex(data)
             else:
