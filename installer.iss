@@ -1,5 +1,5 @@
 #define MyAppName "MHW Layer Studio"
-#define MyAppVersion "0.6.1"
+#define MyAppVersion "0.6.2"
 #define MyAppPublisher "MHW Layer Studio"
 #define MyAppExeName "MHWLayerStudio.exe"
 
@@ -13,7 +13,7 @@ PrivilegesRequired=lowest
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=installer-output
-OutputBaseFilename=MHW-Layer-Studio-Setup-0.6.1
+OutputBaseFilename=MHW-Layer-Studio-Setup-0.6.2
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

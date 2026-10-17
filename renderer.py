@@ -36,6 +36,7 @@ class SoftwareRenderer:
         self.selected_keys = set()
         self.comparison_keys = set()
         self.hidden_keys = set()
+        self.permanent_hidden_keys = frozenset()
         self.enabled_parts = {"helm", "body", "arm", "wst", "leg", "other"}
         self.active_outfit = None  # None displays every outfit.
         self.lod_bit = 1  # Preview one detail version, plus common geometry.
@@ -85,9 +86,12 @@ class SoftwareRenderer:
                 and (self.active_outfit is None or document.outfit_id == self.active_outfit)
                 and visible_lod(mesh, self.lod_bit)
                 and (document.name, mesh.index) not in self.hidden_keys
+                and ((document.name, mesh.index) not in self.permanent_hidden_keys
+                     or self.isolate_selected and (document.name, mesh.index) in self.selected_keys)
                 and (not self.isolate_selected or (document.name, mesh.index) in self.selected_keys
                      or (document.name, mesh.index) in self.comparison_keys)
-                and (not include_health or not self.health_enabled or
+                and (self.isolate_selected and (document.name, mesh.index) in self.permanent_hidden_keys
+                     or not include_health or not self.health_enabled or
                      ((document.name, mesh.index) not in self.health_hidden_keys if self.health_hidden_keys is not None
                       else self.visible_for_health(mesh)))]
 

@@ -30,6 +30,8 @@ jobs:
           Copy-Item MHWI-VisualControllerExtended.ini release/nativePC/plugins/
           Copy-Item README.md,LICENSE,THIRD_PARTY_NOTICES.md,DEVELOPMENT.md,MHW_TOOLKIT_LICENSE.txt release/
           Copy-Item third_party/minhook/LICENSE.txt release/MINHOOK_LICENSE.txt
+          New-Item -ItemType Directory -Force release/third_party/safetyhook | Out-Null
+          Copy-Item third_party/safetyhook/LICENSE.SafetyHook,third_party/safetyhook/LICENSE.Zydis release/third_party/safetyhook/
       - uses: actions/upload-artifact@v4
         with:
           name: MHWLS-VisualController-Plugin

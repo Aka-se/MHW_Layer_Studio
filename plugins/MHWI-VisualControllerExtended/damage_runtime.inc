@@ -1,6 +1,6 @@
 // Included after plugin's INI reader and cached-state definitions.
 namespace damage_runtime {
-struct Part { int id = -1, unit = -2, threshold = -2; std::string pool; };
+struct Part { int id = -1, unit = -2, threshold = -2, forceHidden = 0; std::string pool; };
 struct Model {
     int version = 0, step = 0;
     bool random = false, hasMode = false, valid = true;
@@ -41,18 +41,21 @@ void Value(const std::string& section, const std::string& key, const std::string
     if (key == "Id") model.valid &= Integer(value, part.id);
     else if (key == "Unit") model.valid &= Integer(value, part.unit);
     else if (key == "Threshold") model.valid &= Integer(value, part.threshold);
+    else if (key == "ForceHidden") model.valid &= Integer(value, part.forceHidden);
     else if (key == "Pool") part.pool = value;
 }
 
 bool Validate(Model& model, std::uint64_t seed)
 {
-    if (!model.valid || model.version != 1 || model.step != 5 || !model.hasMode || model.parts.empty()) return false;
+    if (!model.valid || (model.version != 1 && model.version != 2) || model.step != 5 || !model.hasMode || model.parts.empty()) return false;
     std::set<int> ids;
     std::map<std::string, std::set<int>> units;
     for (const auto& entry : model.parts) {
         const auto& part = entry.second;
         if (part.id < 20000 || part.id > 64999 || !ids.insert(part.id).second ||
             part.unit < -1 || part.unit >= 2048 || part.threshold < -1 || part.threshold > 100 ||
+            (part.forceHidden != 0 && part.forceHidden != 1) ||
+            (part.forceHidden && (model.version != 2 || part.unit != -1)) ||
             part.pool.size() != 16 || part.pool.find_first_not_of("0123456789abcdef") != std::string::npos) return false;
         if (part.unit >= 0) units[part.pool].insert(part.unit);
     }
@@ -108,6 +111,9 @@ void Load()
     gModels = std::move(models);
     std::fill(std::begin(gStates), std::end(gStates), static_cast<signed char>(-1));
     for (int id : claimed) if (!legacyIds.count(id)) gStates[id] = 1;
+    for (const auto& model : gModels)
+        for (const auto& entry : model.parts)
+            if (entry.second.forceHidden) gStates[entry.second.id] = 0;
     gLoaded = true; gActor = 0; gMap = -1; gDead = false;
     const auto count = gModels.size();
     ::ReleaseSRWLockExclusive(&gLock);
@@ -130,8 +136,8 @@ void Refresh(const player::StateSnapshot& state, float visual, bool enabled)
         }
         for (const auto& entry : model.parts) {
             const auto& part = entry.second;
-            bool show = true;
-            if (ready) {
+            bool show = !part.forceHidden;
+            if (ready && !part.forceHidden) {
                 if (model.random) show = part.unit < 0 || !model.pools.at(part.pool).Hidden(static_cast<unsigned>(part.unit));
                 else show = part.threshold < 0 || visual > part.threshold;
             }

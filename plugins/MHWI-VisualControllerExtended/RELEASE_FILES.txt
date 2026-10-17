@@ -9,3 +9,5 @@ THIRD_PARTY_NOTICES.md -> THIRD_PARTY_NOTICES.md
 DEVELOPMENT.md -> DEVELOPMENT.md
 third_party/minhook/LICENSE.txt -> MINHOOK_LICENSE.txt
 MHW_TOOLKIT_LICENSE.txt -> MHW_TOOLKIT_LICENSE.txt
+third_party/safetyhook/LICENSE.SafetyHook -> third_party/safetyhook/LICENSE.SafetyHook
+third_party/safetyhook/LICENSE.Zydis -> third_party/safetyhook/LICENSE.Zydis

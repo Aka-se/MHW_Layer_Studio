@@ -1,7 +1,7 @@
 # MHWI-VisualControllerExtended
 
 《怪物猎人：世界》变身插件拓展。兼容原变身插件visual_controller_v5，请在拥有visual_controller_v5的情况下使用。
-当前版本：v1.5.0-random-trial.1。
+当前版本：v1.5.1。
 
 ## 构建
 
@@ -117,6 +117,12 @@ cmake --build build/safetyhook-cmake --config Release
 
 ## MHW Layer Studio 扩展
 
+### 始终隐藏（v1.5.1）
+
+编辑器 v0.6.2 的“始终隐藏”随模组清单保存，使用 `Version=2` 与部件字段 `ForceHidden=1`。此部件在手动和随机模式中都隐藏，不参与随机预算；满血、回血、大剑临时战损恢复、角色/地图变化或血量暂不可读时也不恢复。旧 `Version=1` 清单继续按原规则读取。请把模型和清单一起安装，不要将清单合并进主 INI。插件总开关关闭时仍按设计透传游戏查询。
+
+需要恢复组件时，在编辑器重新分配层级后重新保存模组。请同时更新 DLL 至 1.5.1；旧插件不支持 Version=2。
+
 ### 随机战损
 
 编辑器的“随机战损”模式会在模组内写入
@@ -144,6 +150,11 @@ cmake --build build/safetyhook-cmake --config Release
 - 当前地图读取使用 `MapRootRva=0x500CDA0` 和 CT 的 `0x80 → 0xEEC0 → 0x118` 指针链；游戏版本更新后可能需要同步更新该 RVA，设为 `0` 可禁用地图变化复位。
 
 ## 更新日志
+
+### v1.5.1
+
+- 支持始终隐藏的 Version=2 清单和 ForceHidden 字段；继续兼容 Version=1。
+- 永久隐藏组件不占随机预算，初次加载与状态复位期间保持隐藏。
 
 ### v1.5.0-random-trial.1
 

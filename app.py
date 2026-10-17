@@ -29,7 +29,7 @@ from dialog_geometry import center_dialog
 
 
 APP_NAME = "MHW Layer Studio"
-APP_VERSION = "0.6.1"
+APP_VERSION = "0.6.2"
 
 
 class LayerStudio(tk.Tk):
@@ -183,6 +183,8 @@ class LayerStudio(tk.Tk):
 
     def _mesh_visibility(self, document, mesh):
         key = (document.name, mesh.index)
+        if self.session and self.session.annotations.get(key, {}).get('visibility') == 'hidden':
+            return '始终隐藏 · 隔离查看' if self.isolate.get() and key in self._selection_keys else '始终隐藏'
         if key in self.renderer.hidden_keys:
             return "手动隐藏"
         if not self.part_vars.get(document.equipment_part, self.part_vars["other"]).get():
@@ -337,6 +339,7 @@ class LayerStudio(tk.Tk):
     def _populate_tree(self) -> None:
         opened_groups = {name for iid, name in self._group_iids.items() if self.tree.exists(iid) and self.tree.item(iid, "open")}
         self.tree.delete(*self.tree.get_children())
+        self.tree.tag_configure('permanent_hidden', foreground='#777777')
         self._group_iids, self._document_iids, self._tree_group_members = {}, {}, {}
         self._tree_group_signature = self._group_tree_signature()
         self._tree_inventory = self._mesh_inventory()
@@ -385,7 +388,8 @@ class LayerStudio(tk.Tk):
                     for _, index in member_order(self.workspace, [k for k in local if k[0] == document_name]):
                         mesh = document.meshes[index]
                         self.tree.insert(parent, "end", iid=f"m:{di}:{index}", text=self._mesh_text(document, mesh),
-                                         values=self._mesh_values(document, mesh))
+                                         values=self._mesh_values(document, mesh),
+                                         tags=('permanent_hidden',) if self.session.annotations.get((document.name, index), {}).get('visibility') == 'hidden' else ())
             for name, members in records:
                 labels = [name or "未成组", *self.session.parent_groups.get(name, [])]
                 if query and not any(query in label.casefold() for label in labels):
@@ -416,6 +420,7 @@ class LayerStudio(tk.Tk):
                     iid=iid,
                     text=self._mesh_text(document, mesh),
                     values=self._mesh_values(document, mesh),
+                    tags=('permanent_hidden',) if self.session.annotations.get((document.name, mesh.index), {}).get('visibility') == 'hidden' else (),
                 )
 
     def _group_node_values(self, iid):
@@ -535,6 +540,8 @@ class LayerStudio(tk.Tk):
 
     def _mesh_text(self, document, mesh):
         label = layer_name(mesh.visible_condition, self.session.health_thresholds)
+        if self.session.annotations.get((document.name, mesh.index), {}).get('visibility') == 'hidden':
+            label = '始终隐藏'
         name = self.session.annotations.get((document.name, mesh.index), {}).get("name")
         if not name and getattr(document, "_mesh_labels", [""] * len(document.meshes))[mesh.index]:
             frame = self._position_frames[document.outfit_id]
@@ -1098,6 +1105,19 @@ class LayerStudio(tk.Tk):
         except ValueError as exc:
             messagebox.showerror("Group ID 无效", str(exc), parent=self)
 
+    def apply_always_hidden(self):
+        selected = self._selected_meshes()
+        if not selected:
+            self.status.set('请先选择组件或部件组，再设置始终隐藏。')
+            return
+        try:
+            count = self.session.set_always_hidden([(d.name, i) for d, i in selected])
+        except ValueError as exc:
+            messagebox.showerror('无法设置始终隐藏', str(exc), parent=self)
+            return
+        self._refresh_groups()
+        self.status.set(f'已设置 {count} 个 Mesh 始终隐藏 · 分配其他层级即可恢复 · 导出时附带插件清单，需要 VCE 1.5.1')
+
     def reset_all(self) -> None:
         if not self.workspace:
             return
@@ -1126,7 +1146,8 @@ class LayerStudio(tk.Tk):
                 if not self.tree.exists(f"m:{document_index}:{mesh.index}"):
                     continue
                 self.tree.item(f"m:{document_index}:{mesh.index}",
-                               text=self._mesh_text(document, mesh), values=self._mesh_values(document, mesh))
+                               text=self._mesh_text(document, mesh), values=self._mesh_values(document, mesh),
+                               tags=('permanent_hidden',) if self.session.annotations.get((document.name, mesh.index), {}).get('visibility') == 'hidden' else ())
         for iid in self._group_iids:
             self.tree.item(iid, values=self._group_node_values(iid))
         self._tree_selected()
@@ -1222,6 +1243,8 @@ class LayerStudio(tk.Tk):
             self.status.set("已重做修改")
 
     def _sync_preview_controls(self):
+        from damage_model import permanently_hidden
+        self.renderer.permanent_hidden_keys = permanently_hidden(self.session) if self.session else frozenset()
         self._update_damage_preview()
         self.renderer.health = int(float(self.health.get()))
         self.renderer.health_enabled = self.simulate_health.get()
@@ -1284,6 +1307,8 @@ class LayerStudio(tk.Tk):
                 button.pack(fill="x", pady=3)
                 button.configure(state="normal")
         self.layer_buttons[0].configure(text="基础 / 原始\n不随血量隐藏（0）")
+        self.permanent_hide_button.pack_forget()
+        self.permanent_hide_button.pack(fill='x', pady=3, after=self.layer_buttons[0])
         for group in wanted[1:]:
             label = layer_name(group, values)
             effect = "分配后隐藏" if int(self.health.get()) <= values[group] else "分配后显示"
@@ -1740,12 +1765,14 @@ class LayerStudio(tk.Tk):
         scroll = ttk.Scrollbar(dialog, orient="vertical", command=text.yview)
         scroll.grid(row=1, column=0, sticky="nse", padx=(0, 10))
         text.configure(yscrollcommand=scroll.set)
-        text.insert("1.0", "\n".join(f"{change['part']} / {Path(change['document']).name} / Mesh {change['mesh']} / {change['display_name'] or change['material']}：{change['original']} → {change['group']}"
+        text.insert("1.0", "\n".join(f"{change['part']} / {Path(change['document']).name} / Mesh {change['mesh']} / {change['display_name'] or change['material']}：{change['original']} → {change['group']}" + (' · 始终隐藏' if change.get('always_hidden') else '')
                                       for change in changes) or ("没有 Group 修改，将导出已拆分的模型副本。" if splits else "没有 Group 修改，将导出原模组副本。"))
         text.configure(state="disabled")
         note = ttk.Label(dialog, text="临时隐藏、部位开关和半透明不写入模组。自定义 Group 不会自动生成血量规则。", padding=10, wraplength=600)
         if self.session.damage_model['enabled']:
             note.configure(text='双模式导出：自动写入独立控制 ID 和 nativePC/plugins/MHWLayerStudio 配置；原手动层级保存在编辑信息中。需要 VCE 1.5.0 或更新版。临时隐藏和部位开关不写入模组。')
+        if any(value.get('visibility') == 'hidden' for value in self.session.annotations.values()):
+            note.configure(text='包含“始终隐藏”：模型与 nativePC/plugins/MHWLayerStudio 清单必须一起安装，需要 VCE 1.5.1 或更新版。原分层与几何保留。临时隐藏不导出。')
         note.grid(row=2, column=0, sticky="ew")
         buttons = ttk.Frame(dialog, padding=10)
         buttons.grid(row=3, column=0, sticky="ew")
@@ -2107,6 +2134,9 @@ def main() -> None:
         except (OSError, AttributeError):
             ctypes.windll.user32.SetProcessDPIAware()
     app = LayerStudio()
+    if len(sys.argv) == 4 and sys.argv[1] == '--check-permanent-visibility':
+        from permanent_visibility_validation import check
+        sys.exit(check(app, sys.argv[2], sys.argv[3]))
     if len(sys.argv) == 4 and sys.argv[1] == '--check-damage-model':
         from damage_validation import check
         sys.exit(check(app, sys.argv[2], sys.argv[3]))

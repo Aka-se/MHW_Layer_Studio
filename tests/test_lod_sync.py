@@ -152,7 +152,7 @@ class SyncTests(unittest.TestCase):
             project = Path(temp) / "layers.json"
             session.save(project)
             saved = json.loads(project.read_text(encoding="utf-8"))
-            self.assertEqual(12, saved["version"])
+            self.assertEqual(13, saved["version"])
             restored, _ = EditorSession.open(project)
             self.assertEqual(d.bytes(), restored.document(d.name).bytes())
             self.assertEqual(groups, restored.named_groups)

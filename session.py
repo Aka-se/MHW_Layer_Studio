@@ -6,6 +6,7 @@ import copy
 import json
 import os
 import tempfile
+import secrets
 from pathlib import Path
 
 from mod3 import Mod3Error, ModWorkspace
@@ -47,7 +48,7 @@ class EditorSession:
         return {"original_groups": groups.copy(), "mesh_labels": labels.copy()}
 
     def _import_metadata(self, data):
-        if not isinstance(data, dict) or data.get("format") != "mhw-layer-metadata" or data.get("version") not in (1, 2, 3, 4):
+        if not isinstance(data, dict) or data.get("format") != "mhw-layer-metadata" or data.get("version") not in (1, 2, 3, 4, 5):
             raise Mod3Error("不支持的编辑信息格式")
         thresholds = restore_thresholds(data.get("health_thresholds"), legacy=data["version"] < 3)
         records = data["documents"]
@@ -91,7 +92,7 @@ class EditorSession:
         single = self.workspace.kind == "mod3"
         names = {d.name: Path(path).name if single else d.name for d in self.workspace.documents}
         # Exported geometry is already split; metadata never replays split recipes.
-        payload = {"format": "mhw-layer-metadata", "version": 4,
+        payload = {"format": "mhw-layer-metadata", "version": 5,
                    "health_thresholds": self.health_thresholds,
                    "damage_model": self.damage_model.copy(),
                    "documents": [{"name": names[d.name], "sha256": hashlib.sha256(exported[d.name].bytes()).hexdigest(),
@@ -127,7 +128,7 @@ class EditorSession:
         return (tuple((document.name, mesh.index, mesh.visible_condition)
                       for document, mesh in self.workspace.all_meshes()),
                 tuple((name, tuple(sorted(keys))) for name, keys in sorted(self.named_groups.items())),
-                tuple((key, value.get("name", ""), value.get("note", ""), value.get('damage_role', '')) for key, value in sorted(self.annotations.items())),
+                tuple((key, value.get("name", ""), value.get("note", ""), value.get('damage_role', ''), value.get('visibility', '')) for key, value in sorted(self.annotations.items())),
                 tuple(sorted(self.health_thresholds.items())),
                 tuple((name, tuple(children)) for name, children in sorted(self.parent_groups.items())),
                 tuple(sorted(self.damage_model.items())))
@@ -158,8 +159,29 @@ class EditorSession:
     def _annotation_snapshot(self):
         return {key: value.copy() for key, value in self.annotations.items()}
 
+    def set_always_hidden(self, keys):
+        keys = self._check_keys(keys)
+        if not keys:
+            raise Mod3Error('请先选择部件')
+        if self.workspace.kind == 'mod3':
+            raise Mod3Error('始终隐藏需要随模型导出插件清单，请打开完整模组文件夹或压缩包。')
+        before = self._annotation_snapshot()
+        damage_before = self.damage_model.copy()
+        count = self.edit_annotations(keys, visibility='hidden')
+        if not count:
+            return 0
+        self.damage_model = damage_settings({'enabled': True, 'mode': self.damage_model['mode'],
+                                            'token': self.damage_model['token'] or secrets.token_hex(8)})
+        self._undo[-1] = {'kind': 'visibility', 'before': before, 'after': self._annotation_snapshot(),
+                          'damage_before': damage_before, 'damage_after': self.damage_model.copy(), 'groups': []}
+        return count
+
     @staticmethod
     def _validate_annotation(field, value):
+        if field == 'visibility':
+            if value not in ('', 'hidden'):
+                raise Mod3Error('始终隐藏标记无效')
+            return value
         if field == 'damage_role':
             if value not in ('', 'base', 'random'):
                 raise Mod3Error('随机战损标记无效')
@@ -646,7 +668,23 @@ class EditorSession:
     def apply_group(self, keys, group):
         if type(group) is not int or not 0 <= group <= 65535:
             raise ValueError("Group ID 必须在 0–65535 之间")
-        return self.apply_values([(name, index, group) for name, index in sorted(set(keys))])
+        keys = self._check_keys(keys)
+        before = self._annotation_snapshot()
+        edits = [(n, i, self.document(n).meshes[i].visible_condition, group) for n, i in keys
+                 if self.document(n).meshes[i].visible_condition != group]
+        cleared = {k for k in keys if self.annotations.get(k, {}).get('visibility') == 'hidden'}
+        if not cleared:
+            return self.apply_values([(name, index, group) for name, index in sorted(keys)])
+        for key in cleared:
+            self.annotations[key].pop('visibility')
+            if not any(self.annotations[key].values()):
+                self.annotations.pop(key)
+        for n, i, _, new in edits:
+            self.document(n).set_visible_condition(i, new)
+        self._undo.append({'kind': 'visibility', 'before': before, 'after': self._annotation_snapshot(),
+                           'damage_before': self.damage_model.copy(), 'damage_after': self.damage_model.copy(), 'groups': edits})
+        self._redo.clear()
+        return len(cleared | {(n, i) for n, i, _, _ in edits})
 
     def apply_values(self, values):
         edits = []
@@ -672,7 +710,12 @@ class EditorSession:
             return False
         edits = self._undo.pop()
         if isinstance(edits, dict):
-            if edits.get('kind') == 'damage_model':
+            if edits.get('kind') == 'visibility':
+                self.annotations = copy.deepcopy(edits['before'])
+                self.damage_model = edits['damage_before'].copy()
+                for n, i, old, _ in edits['groups']:
+                    self.document(n).set_visible_condition(i, old)
+            elif edits.get('kind') == 'damage_model':
                 self.damage_model = edits['before'].copy()
             elif edits.get("kind") == "thresholds":
                 self.health_thresholds = edits["before"].copy()
@@ -703,7 +746,12 @@ class EditorSession:
             return False
         edits = self._redo.pop()
         if isinstance(edits, dict):
-            if edits.get('kind') == 'damage_model':
+            if edits.get('kind') == 'visibility':
+                self.annotations = copy.deepcopy(edits['after'])
+                self.damage_model = edits['damage_after'].copy()
+                for n, i, _, new in edits['groups']:
+                    self.document(n).set_visible_condition(i, new)
+            elif edits.get('kind') == 'damage_model':
                 self.damage_model = edits['after'].copy()
             elif edits.get("kind") == "thresholds":
                 self.health_thresholds = edits["after"].copy()
@@ -818,9 +866,11 @@ class EditorSession:
         return [{"document": document.name, "mesh": mesh.index, "part": document.equipment_part,
                  "material": document.material_info(mesh.material_id).name,
                  "display_name": self.annotations.get((document.name, mesh.index), {}).get("name", ""),
-                 "original": document.original_group(mesh.index), "group": mesh.visible_condition}
+                 "original": document.original_group(mesh.index), "group": mesh.visible_condition,
+                 "always_hidden": self.annotations.get((document.name, mesh.index), {}).get('visibility') == 'hidden'}
                 for document, mesh in self.workspace.all_meshes()
-                if mesh.visible_condition != document.original_group(mesh.index)]
+                if mesh.visible_condition != document.original_group(mesh.index)
+                or self.annotations.get((document.name, mesh.index), {}).get('visibility') == 'hidden']
 
     def validate_patch(self):
         for document in self.workspace.documents:
@@ -847,7 +897,7 @@ class EditorSession:
             if existing.get("format") != PROJECT_FORMAT:
                 raise Mod3Error("目标不是分层项目，不能覆盖")
         self.validate_patch()
-        payload = {"format": PROJECT_FORMAT, "version": 12,
+        payload = {"format": PROJECT_FORMAT, "version": 13,
                    "damage_model": self.damage_model.copy(),
                    "health_thresholds": self.health_thresholds,
                    "annotations": [{"document": key[0], "mesh": key[1], **value} for key, value in sorted(self.annotations.items())],
@@ -875,7 +925,7 @@ class EditorSession:
     def open(cls, path):
         path = Path(path).resolve()
         data = json.loads(path.read_text(encoding="utf-8-sig"))
-        if data.get("format") != PROJECT_FORMAT or data.get("version") not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
+        if data.get("format") != PROJECT_FORMAT or data.get("version") not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
             raise Mod3Error("不支持的分层项目格式")
         source = (path.parent / data["source"]).resolve()
         workspace = ModWorkspace.open(source)
@@ -899,7 +949,7 @@ class EditorSession:
             if not isinstance(splits, list) or len(splits) > 1024:
                 raise Mod3Error("项目拆分记录无效")
             for recipe in splits:
-                if isinstance(recipe, dict) and recipe.get("mode") == "lod-islands-v1" and data["version"] in (8, 9, 10, 11, 12):
+                if isinstance(recipe, dict) and recipe.get("mode") == "lod-islands-v1" and data["version"] in (8, 9, 10, 11, 12, 13):
                     parts = recipe.get("partitions")
                     if not isinstance(parts, list) or not parts or any(not isinstance(p, dict) or type(p.get("mesh")) is not int for p in parts):
                         raise Mod3Error("LOD 三角面分区记录无效")
@@ -910,7 +960,7 @@ class EditorSession:
                     continue
                 if type(recipe) is int:
                     index, mode = recipe, "exact"
-                elif isinstance(recipe, dict) and data["version"] in (4, 5, 6, 7, 8, 9, 10, 11, 12):
+                elif isinstance(recipe, dict) and data["version"] in (4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
                     index, mode = recipe.get("mesh"), recipe.get("mode")
                     if not isinstance(mode, str):
                         raise Mod3Error("项目拆分算法无效")
@@ -965,5 +1015,7 @@ class EditorSession:
             annotations[key] = {field: session._validate_annotation(field, record.get(field, "")) for field in ("name", "note")}
             if record.get('damage_role'):
                 annotations[key]['damage_role'] = session._validate_annotation('damage_role', record['damage_role'])
+            if record.get('visibility'):
+                annotations[key]['visibility'] = session._validate_annotation('visibility', record['visibility'])
         parents = self._validate_parents(data.get("parent_groups", {}), named_groups)
         self.named_groups, self.annotations, self.parent_groups = named_groups, annotations, parents

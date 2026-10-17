@@ -30,7 +30,7 @@ int main(int argc, char** argv)
             check("real export is random mode", model.random);
             for (const auto& entry : model.parts) {
                 const auto& part = entry.second;
-                const bool expected = part.unit < 0 || !model.pools.at(part.pool).Hidden(static_cast<unsigned>(part.unit));
+                const bool expected = !part.forceHidden && (part.unit < 0 || !model.pools.at(part.pool).Hidden(static_cast<unsigned>(part.unit)));
                 check("real exported ID reaches hook cache", Query(static_cast<unsigned short>(part.id)) == expected);
             }
         }
@@ -77,6 +77,34 @@ int main(int argc, char** argv)
     check("manual mode restores original threshold including protected part", Query(21000) == 0 && Query(21021) == 0);
     damage_runtime::Refresh(state, 90, true);
     check("manual mode shows above saved threshold", Query(21000) == 1 && Query(21021) == 1);
+    const wchar_t* fixed = L"MHWLayerStudio-owned-hidden.ini";
+    auto fixedWrite = [&](const char* mode) {
+        FILE* file = nullptr; _wfopen_s(&file, fixed, L"wb");
+        if (!file) return false;
+        std::fprintf(file, "[DamageModel]\nVersion=2\nStep=5\nMode=%s\n"
+                "[DamagePart0]\nId=22000\nPool=1234567890abcdef\nUnit=-1\nThreshold=-1\nForceHidden=1\n"
+                "[DamagePart1]\nId=22001\nPool=1234567890abcdef\nUnit=0\nThreshold=80\nForceHidden=0\n", mode);
+        return std::fclose(file) == 0;
+    };
+    check("v2 hidden fixture written", fixedWrite("random"));
+    damage_runtime::Load();
+    check("v1 and v2 manifests load together", damage_runtime::gModels.size() == 2);
+    check("permanent hidden takes effect before first state poll", Query(22000) == 0);
+    damage_runtime::Refresh(state, 100, true);
+    check("permanent hidden survives full health", Query(22000) == 0 && Query(22001) == 1);
+    damage_runtime::Refresh(state, 50, true);
+    check("permanent hidden excluded from random budget", Query(22000) == 0 && Query(22001) == 1);
+    damage_runtime::Refresh(state, 0, true);
+    check("random loss still affects eligible unit", Query(22000) == 0 && Query(22001) == 0);
+    state.entityAddress = 0; damage_runtime::Refresh(state, -1, true);
+    check("unavailable HP never reveals permanent hidden", Query(22000) == 0);
+    state.entityAddress = 2; state.currentMapId = 505;
+    damage_runtime::Refresh(state, 100, true);
+    check("map or actor reset never reveals permanent hidden", Query(22000) == 0);
+    check("hidden fixture switched to manual", fixedWrite("manual"));
+    damage_runtime::Load(); damage_runtime::Refresh(state, 100, true);
+    check("manual mode also respects permanent hidden", Query(22000) == 0 && Query(22001) == 1);
+    ::DeleteFileW(fixed); damage_runtime::Load();
     check("duplicate fixture copied", ::CopyFileW(filename.c_str(), L"MHWLayerStudio-owned-collision.ini", FALSE) != 0);
     damage_runtime::Load();
     check("colliding models excluded from random pools", damage_runtime::gModels.empty());

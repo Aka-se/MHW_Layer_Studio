@@ -706,7 +706,7 @@ bool Install(std::uintptr_t directTarget = 0)
 // ===========================================================================
 namespace plugin {
 
-constexpr char kVersion[] = "1.5.0-random-trial.1";
+constexpr char kVersion[] = "1.5.1";
 
 HMODULE gModule = nullptr;
 volatile LONG gStop = 0;

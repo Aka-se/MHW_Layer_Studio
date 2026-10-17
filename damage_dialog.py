@@ -55,17 +55,23 @@ class DamageSettingsDialog(tk.Toplevel):
 
     def protected(self, record):
         return any(self.roles.get(k) == 'base' or (not self.roles.get(k) and
-                   self.app.session.document(k[0]).meshes[k[1]].visible_condition == 0) for k in record['keys'])
+                   self.app.session.document(k[0]).meshes[k[1]].visible_condition == 0)
+                   for k in record['keys'] if k not in record.get('hidden_keys', ()))
 
     def refresh(self):
         for i, r in enumerate(self.records):
-            values = (r['pool'], len(r['keys']), '基础 · 保护' if self.protected(r) else '参与随机')
+            hidden = len(r.get('hidden_keys', ()))
+            role = '始终隐藏' if hidden == len(r['keys']) else '基础 · 保护' if self.protected(r) else '参与随机'
+            if 0 < hidden < len(r['keys']):
+                role += f' · {hidden}个始终隐藏'
+            values = (r['pool'], len(r['keys']), role)
             if self.tree.exists(str(i)):
                 self.tree.item(str(i), values=values)
             else:
                 self.tree.insert('', 'end', iid=str(i), text=r['name'], values=values)
-        protected = sum(self.protected(r) for r in self.records)
-        self.summary.configure(text=f'共 {len(self.records)} 个单位 · {protected} 个受保护 · {len(self.records) - protected} 个参与随机')
+        active = [r for r in self.records if set(r['keys']) - set(r.get('hidden_keys', ()))]
+        protected = sum(self.protected(r) for r in active)
+        self.summary.configure(text=f'共 {len(self.records)} 个单位 · {len(self.records) - len(active)} 个全部始终隐藏 · {protected} 个受保护 · {len(active) - protected} 个参与随机')
 
     def mark(self, role):
         for iid in self.tree.selection():

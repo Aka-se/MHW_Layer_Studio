@@ -13,6 +13,10 @@ from pathlib import Path
 ID_MIN, ID_MAX = 20000, 64999
 
 
+def permanently_hidden(session):
+    return frozenset(k for k, value in session.annotations.items() if value.get('visibility') == 'hidden')
+
+
 def settings(value=None):
     value = value or {}
     enabled, mode, token = value.get('enabled', False), value.get('mode', 'manual'), value.get('token', '')
@@ -47,13 +51,16 @@ def units(session):
         identity = ('group', label) if key in groups else ('mesh', *key)
         grouped[(document.outfit_id, identity)].append(key)
     result = []
+    hidden = permanently_hidden(session)
     for (pool, identity), keys in sorted(grouped.items(), key=lambda pair: str(pair[0])):
+        active = [k for k in keys if k not in hidden]
         protected = any(session.annotations.get(k, {}).get('damage_role') == 'base' or
                         (session.annotations.get(k, {}).get('damage_role', '') == '' and
-                         session.document(k[0]).meshes[k[1]].visible_condition == 0) for k in keys)
+                         session.document(k[0]).meshes[k[1]].visible_condition == 0) for k in active)
         result.append({'pool': pool, 'name': identity[1] if identity[0] == 'group' else
                        f'{Path(keys[0][0]).name} / Mesh {keys[0][1]}',
-                       'keys': tuple(sorted(keys)), 'protected': protected})
+                       'keys': tuple(sorted(keys)), 'protected': protected,
+                       'hidden_keys': tuple(sorted(set(keys) & hidden))})
     return result
 
 
@@ -70,15 +77,15 @@ class DamagePreview:
         self.hidden = {}
 
     def update(self, records, hp):
-        signature = tuple((r['pool'], r['keys'], r['protected']) for r in records)
+        signature = tuple((r['pool'], r['keys'], r['protected'], r.get('hidden_keys', ())) for r in records)
         if signature != self.signature:
             self.signature, self.hidden = signature, {}
         pools = defaultdict(list)
         for index, record in enumerate(records):
-            if not record['protected']:
+            if not record['protected'] and set(record['keys']) - set(record.get('hidden_keys', ())):
                 pools[record['pool']].append(index)
         step = step_for_health(hp)
-        hidden_keys = set()
+        hidden_keys = {key for r in records for key in r.get('hidden_keys', ())}
         for pool, indices in pools.items():
             hidden = self.hidden.setdefault(pool, set())
             target = len(indices) * step // 20
@@ -118,6 +125,7 @@ def export_plan(session):
         raise ValueError('双模式需要同时导出插件配置，请打开模组压缩包或完整文件夹再导出。')
     config = session.damage_model
     records = units(session)
+    permanent = permanently_hidden(session)
     token = config['token']
     occupied = {m.visible_condition for _, m in session.workspace.all_meshes()} | _reserved_ids(token)
     cursor = ID_MIN + int(token[:8], 16) % (ID_MAX - ID_MIN + 1)
@@ -134,15 +142,20 @@ def export_plan(session):
         variants = defaultdict(list)
         for key in record['keys']:
             group = session.document(key[0]).meshes[key[1]].visible_condition
-            if group == 0 and record['protected']:
+            force_hidden = key in permanent
+            if group == 0 and record['protected'] and not force_hidden:
                 continue
-            if group != 0 and group not in session.health_thresholds:
+            if group != 0 and group not in session.health_thresholds and not force_hidden:
+                if config['mode'] == 'manual':
+                    continue  # Keep unconfigured game/NPC groups under their original handler.
                 raise ValueError(f'{record["name"]} 使用自定义 Group {group}；请先为它设置隐藏阈值，才能保留手动模式。')
-            variants[(group, _native_prefix(key[0]))].append(key)
+            variants[(group, _native_prefix(key[0]), force_hidden)].append(key)
+        if not variants:
+            continue
         unit = -1 if record['protected'] else pool_units[record['pool']]
-        if not record['protected']:
+        if not record['protected'] and set(record['keys']) - set(record['hidden_keys']):
             pool_units[record['pool']] += 1
-        for (group, prefix), keys in sorted(variants.items()):
+        for (group, prefix, force_hidden), keys in sorted(variants.items()):
             for _ in range(ID_MAX - ID_MIN + 1):
                 if cursor not in occupied:
                     break
@@ -155,16 +168,21 @@ def export_plan(session):
                 clones[name].set_visible_condition(index, control_id)
             # Pool names are opaque hashes, not INI-escaped asset paths.
             pool = hashlib.sha256((token + record['pool']).encode()).hexdigest()[:16]
-            files[prefix].append((control_id, pool, unit, session.health_thresholds.get(group, -1)))
+            files[prefix].append((control_id, pool, -1 if force_hidden else unit,
+                                  session.health_thresholds.get(group, -1), force_hidden))
     if sum(pool_units.values()) > 4096 or any(count > 2048 for count in pool_units.values()):
         raise ValueError('可随机部件过多，请先成组；每套最多2048组，单包最多4096组。')
     output = {}
     for prefix, parts in files.items():
-        lines = ['; MHW Layer Studio dual-mode manifest; requires VCE 1.5.0 or later.',
+        version = 2 if permanent else 1
+        lines = [f'; MHW Layer Studio manifest; requires VCE {"1.5.1" if permanent else "1.5.0"} or later.',
                  '; Keep beside MHWI-VisualControllerExtended.dll. Ctrl+F5 reloads mode changes.',
-                 '[DamageModel]', 'Version=1', f'Mode={config["mode"]}', 'Step=5', '']
-        for index, (control_id, pool, unit, threshold) in enumerate(parts):
-            lines += [f'[DamagePart{index}]', f'Id={control_id}', f'Pool={pool}', f'Unit={unit}', f'Threshold={threshold}', '']
+                 '[DamageModel]', f'Version={version}', f'Mode={config["mode"]}', 'Step=5', '']
+        for index, (control_id, pool, unit, threshold, force_hidden) in enumerate(parts):
+            lines += [f'[DamagePart{index}]', f'Id={control_id}', f'Pool={pool}', f'Unit={unit}', f'Threshold={threshold}']
+            if version == 2:
+                lines.append(f'ForceHidden={int(force_hidden)}')
+            lines.append('')
         output[f'{prefix}/plugins/MHWLayerStudio-{token}.ini'] = '\r\n'.join(lines).encode('utf-8-sig')
     workspace = copy.copy(session.workspace)
     workspace.documents = list(clones.values())

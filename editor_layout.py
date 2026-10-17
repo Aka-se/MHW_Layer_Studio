@@ -217,6 +217,9 @@ def build(app):
     app.layer_buttons = {}
     app.layer_actions = ttk.Frame(right)
     app.layer_actions.pack(fill="x")
+    app.permanent_hide_button = LayerButton(app.layer_actions, command=app.apply_always_hidden)
+    app.permanent_hide_button.configure(text='始终隐藏\n手动 / 随机均隐藏 · 可重新分配恢复')
+    app.permanent_hide_button.bind('<MouseWheel>', app.right_panel._wheel, add='+')
     more, app.layer_menu = menu_button(right, "更多分配 ▾", (("自定义 Group ID…", app._custom_group_dialog),))
     more.pack(anchor="e", pady=(3, 6))
     ttk.Separator(right).pack(fill="x", pady=4)
