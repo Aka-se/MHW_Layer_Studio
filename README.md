@@ -11,7 +11,7 @@ Standalone MOD3 layer editor for *Monster Hunter: World*. Select, split, group, 
 
 ## 下载
 
-前往 [Releases](https://github.com/Naidong-Lin/MHW_Layer_Studio/releases/latest)：
+前往 [Releases](https://github.com/Aka-se/MHW_Layer_Studio/releases/latest)：
 
 - 安装编辑器：下载 `MHW-Layer-Studio-Setup-*.exe`；
 - 启用游戏内分层：同时下载 `MHWLS-VisualController-Plugin-*.zip`。
@@ -97,7 +97,7 @@ nativePC/plugins/MHWLayerStudio-<标识>.ini
 - **v0.5.x**：完成材质与贴图辨识、模组库、压缩包支持、模型拆分、骨骼/UV 辅助成组、父子组和安全覆盖保存。
 - **v0.1–v0.4**：完成 MOD3 读取、3D 预览、Group ID 修改、血量模拟、规则与模组导出。
 
-完整改动可以查看 [Commits](https://github.com/Naidong-Lin/MHW_Layer_Studio/commits/main) 和 [Releases](https://github.com/Naidong-Lin/MHW_Layer_Studio/releases)。
+完整改动可以查看 [Commits](https://github.com/Aka-se/MHW_Layer_Studio/commits/main) 和 [Releases](https://github.com/Aka-se/MHW_Layer_Studio/releases)。
 
 ## 仓库结构
 
